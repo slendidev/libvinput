@@ -5,7 +5,7 @@ else
 	CFLAGS += -O3
 endif
 
-VERSION = 0x010202
+VERSION = 0x010203
 
 SRC = src/libvinput.c
 
