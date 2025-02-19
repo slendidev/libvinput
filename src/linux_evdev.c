@@ -129,71 +129,9 @@ void update_keyboard_modifiers(
 	}
 }
 
-void handle_key_event(
-    struct libevdev *dev, KeyboardCallback callback, EventListenerInternal *data)
-{
-	struct input_event ev;
-	while (libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev) == 0) {
-		if (ev.type == EV_KEY) {
-			KeyboardEvent event;
-			update_keyboard_modifiers(&event.modifiers, ev.code, ev.value);
-			event.pressed = ev.value == 1;
-			xkb_state_update_key(
-			    data->state, ev.code + 8, event.pressed ? XKB_KEY_DOWN : XKB_KEY_UP);
-			event.keycode = xkb_state_key_get_one_sym(data->state, ev.code + 8);
-			if (event.keycode == 0) return;
-			char buffer[8];
-			int size = xkb_keysym_to_utf8(event.keycode, buffer, sizeof(buffer));
-			if (size > 0)
-				event.keychar = buffer[0];
-			else
-				event.keychar = 0;
-			event.timestamp = ev.time.tv_sec * 1000 + ev.time.tv_usec / 1000;
-
-			if (callback) callback(event);
-		}
-	}
-}
-
-void handle_mouse_event(struct libevdev *dev, MouseButtonCallback button_callback,
-    MouseMoveCallback move_callback)
-{
-	struct input_event ev;
-	static int x = 0, y = 0;
-
-	while (libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev) == 0) {
-		if (ev.type == EV_KEY) {
-			MouseButtonEvent event;
-			switch (ev.code) {
-			case BTN_LEFT: event.button = MouseButtonLeft; break;
-			case BTN_RIGHT: event.button = MouseButtonRight; break;
-			case BTN_MIDDLE: event.button = MouseButtonMiddle; break;
-			default: return;
-			}
-
-			event.kind = ev.value == 1 ? MousePressEvent : MouseReleaseEvent;
-			if (button_callback) button_callback(event);
-		} else if (ev.type == EV_REL) {
-			MouseMoveEvent move_event;
-			switch (ev.code) {
-			case REL_X: x += ev.value; break;
-			case REL_Y: y += ev.value; break;
-			}
-
-			move_event.x = x;
-			move_event.y = y;
-			move_event.velocity_x = ev.code == REL_X ? ev.value : 0;
-			move_event.velocity_y = ev.code == REL_Y ? ev.value : 0;
-			move_event.velocity = sqrt(move_event.velocity_x * move_event.velocity_x
-			                           + move_event.velocity_y * move_event.velocity_y);
-
-			if (move_callback) move_callback(move_event);
-		}
-	}
-}
-
-VInputError evdev_EventListener2_start(EventListener *listener, KeyboardCallback callback,
-    MouseButtonCallback button_callback, MouseMoveCallback move_callback)
+VInputError evdev_EventListener2_start(EventListener *listener,
+    KeyboardCallback keyboard_cb, MouseButtonCallback button_cb,
+    MouseMoveCallback move_cb)
 {
 	if (!listener->initialized) return VINPUT_UNINITIALIZED;
 	EventListenerInternal *data = listener->data;
@@ -207,6 +145,11 @@ VInputError evdev_EventListener2_start(EventListener *listener, KeyboardCallback
 	}
 
 	printf("Devices: %ld\n", vector_size(data->v_valid_devices));
+	for (int i = 0; i < vector_size(data->v_valid_devices); i++) {
+		printf("- %s\n", libevdev_get_name(data->v_valid_devices[i]));
+	}
+
+	static int x = 0, y = 0;
 
 	while (1) {
 		int ret = poll(fds, vector_size(data->v_valid_devices), -1);
@@ -215,13 +158,57 @@ VInputError evdev_EventListener2_start(EventListener *listener, KeyboardCallback
 			break;
 		}
 
-		for (unsigned int i = 0; i < vector_size(data->v_valid_devices); i++) {
+		for (size_t i = 0; i < vector_size(data->v_valid_devices); i++) {
 			if (fds[i].revents & POLLIN) {
 				struct libevdev *dev = data->v_valid_devices[i];
-				if (libevdev_has_event_type(dev, EV_KEY) && libevdev_has_event_type(dev, EV_REL))
-					handle_mouse_event(dev, button_callback, move_callback);
-				else
-					handle_key_event(dev, callback, data);
+				struct input_event ev;
+				while (libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev) == 0) {
+					if (ev.type == EV_KEY) {
+						if (ev.code >= BTN_MOUSE && ev.code < BTN_JOYSTICK) {
+							MouseButtonEvent mbe;
+							switch (ev.code) {
+							case BTN_LEFT: mbe.button = MouseButtonLeft; break;
+							case BTN_RIGHT: mbe.button = MouseButtonRight; break;
+							case BTN_MIDDLE: mbe.button = MouseButtonMiddle; break;
+							default: continue; /* ignore other buttons */
+							}
+							mbe.kind = (ev.value == 1) ? MousePressEvent : MouseReleaseEvent;
+							if (button_cb) button_cb(mbe);
+						} else {
+							KeyboardEvent ke;
+							update_keyboard_modifiers(&ke.modifiers, ev.code, ev.value);
+							ke.pressed = (ev.value == 1);
+							xkb_state_update_key(
+							    data->state, ev.code + 8, ke.pressed ? XKB_KEY_DOWN : XKB_KEY_UP);
+
+							ke.keycode = xkb_state_key_get_one_sym(data->state, ev.code + 8);
+							if (ke.keycode) {
+								char buffer[8];
+								int size = xkb_keysym_to_utf8(ke.keycode, buffer, sizeof(buffer));
+								ke.keychar = (size > 0) ? buffer[0] : 0;
+								ke.timestamp = ev.time.tv_sec * 1000 + ev.time.tv_usec / 1000;
+
+								if (keyboard_cb) keyboard_cb(ke);
+							}
+						}
+					} else if (ev.type == EV_REL) {
+						switch (ev.code) {
+						case REL_X: x += ev.value; break;
+						case REL_Y: y += ev.value; break;
+						default: break;
+						}
+						if (move_cb) {
+							MouseMoveEvent mme;
+							mme.x = x;
+							mme.y = y;
+							mme.velocity_x = (ev.code == REL_X) ? ev.value : 0;
+							mme.velocity_y = (ev.code == REL_Y) ? ev.value : 0;
+							mme.velocity = sqrt((double)mme.velocity_x * mme.velocity_x
+							                    + (double)mme.velocity_y * mme.velocity_y);
+							move_cb(mme);
+						}
+					}
+				}
 			}
 		}
 	}
