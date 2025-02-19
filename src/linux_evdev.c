@@ -172,12 +172,13 @@ VInputError evdev_EventListener2_start(EventListener *listener,
 							case BTN_MIDDLE: mbe.button = MouseButtonMiddle; break;
 							default: continue; /* ignore other buttons */
 							}
-							mbe.kind = (ev.value == 1) ? MousePressEvent : MouseReleaseEvent;
+							mbe.kind = (ev.value == 1 || ev.value == 2) ? MousePressEvent
+							                                            : MouseReleaseEvent;
 							if (button_cb) button_cb(mbe);
 						} else {
 							KeyboardEvent ke;
 							update_keyboard_modifiers(&ke.modifiers, ev.code, ev.value);
-							ke.pressed = (ev.value == 1);
+							ke.pressed = (ev.value == 1 || ev.value == 2);
 							xkb_state_update_key(
 							    data->state, ev.code + 8, ke.pressed ? XKB_KEY_DOWN : XKB_KEY_UP);
 
