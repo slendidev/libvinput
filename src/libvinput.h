@@ -168,6 +168,11 @@ VINPUT_PUBLIC VInputError EventListener_start(
 VINPUT_PUBLIC VInputError EventListener2_start(EventListener *listener,
     KeyboardCallback callback, MouseButtonCallback button_callback,
     MouseMoveCallback move_callback);
+// Stop a running Listener, causing the blocking EventListener_start /
+// EventListener2_start call to return. This is safe to call from a different
+// thread than the one that called start (e.g. from a GUI thread). It is a no-op
+// if the listener is not currently running.
+VINPUT_PUBLIC VInputError EventListener_stop(EventListener *listener);
 // Free up internal data in the Listener.
 VINPUT_PUBLIC VInputError EventListener_free(EventListener *listener);
 
@@ -194,6 +199,7 @@ VINPUT_PUBLIC VInputError EventEmulator_free(EventEmulator *emulator);
 #ifdef LIBVINPUT_OLD_NAMES
 #	define Listener_create EventListener_create
 #	define Listener_start EventListener_start
+#	define Listener_stop EventListener_stop
 #	define Listener_free EventListener_free
 
 #	define Emulator_create EventEmulator_create

@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/eventfd.h>
 #include <unistd.h>
 #include <xkbcommon/xkbcommon.h>
 
@@ -19,6 +20,7 @@ typedef struct _EventListenerInternal
 	struct xkb_keymap *keymap;
 	struct xkb_state *state;
 	struct libevdev **v_valid_devices;
+	int stop_fd; // eventfd used to interrupt poll() from EventListener_stop
 } EventListenerInternal;
 
 VInputError is_keyboard(const char *device_path, bool *is)
@@ -46,6 +48,12 @@ VInputError _evdev_EventListener_init(EventListener *listener)
 	EventListenerInternal *data = listener->data;
 	if (!data) return VINPUT_MALLOC;
 
+	data->stop_fd = eventfd(0, EFD_NONBLOCK);
+	if (data->stop_fd < 0) {
+		free(data);
+		return VINPUT_MALLOC;
+	}
+
 	data->ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
 	if (data->ctx) {
 		data->keymap
@@ -53,14 +61,17 @@ VInputError _evdev_EventListener_init(EventListener *listener)
 		if (data->keymap) {
 			data->state = xkb_state_new(data->keymap);
 			if (!data->state) {
+				close(data->stop_fd);
 				free(data);
 				return VINPUT_XKB;
 			}
 		} else {
+			close(data->stop_fd);
 			free(data);
 			return VINPUT_XKB;
 		}
 	} else {
+		close(data->stop_fd);
 		free(data);
 		return VINPUT_XKB;
 	}
@@ -106,6 +117,7 @@ VInputError _evdev_EventListener_init(EventListener *listener)
 cleanup:
 	closedir(dp);
 cleanup_no_dir:
+	close(data->stop_fd);
 	vector_free(data->v_valid_devices);
 	free(listener->data);
 final:
@@ -136,29 +148,41 @@ VInputError evdev_EventListener2_start(EventListener *listener,
 	if (!listener->initialized) return VINPUT_UNINITIALIZED;
 	EventListenerInternal *data = listener->data;
 
-	struct pollfd *fds = malloc(vector_size(data->v_valid_devices) * sizeof(struct pollfd));
+	size_t ndevices = vector_size(data->v_valid_devices);
+	// One extra pollfd for the stop eventfd, kept as the last entry.
+	struct pollfd *fds = malloc((ndevices + 1) * sizeof(struct pollfd));
 
-	for (size_t i = 0; i < vector_size(data->v_valid_devices); i++) {
+	for (size_t i = 0; i < ndevices; i++) {
 		struct libevdev *dev = data->v_valid_devices[i];
 		fds[i].fd = libevdev_get_fd(dev);
 		fds[i].events = POLLIN;
 	}
+	fds[ndevices].fd = data->stop_fd;
+	fds[ndevices].events = POLLIN;
 
-	printf("Devices: %ld\n", vector_size(data->v_valid_devices));
-	for (int i = 0; i < vector_size(data->v_valid_devices); i++) {
+	printf("Devices: %ld\n", ndevices);
+	for (size_t i = 0; i < ndevices; i++) {
 		printf("- %s\n", libevdev_get_name(data->v_valid_devices[i]));
 	}
 
 	static int x = 0, y = 0;
 
 	while (1) {
-		int ret = poll(fds, vector_size(data->v_valid_devices), -1);
+		int ret = poll(fds, ndevices + 1, -1);
 		if (ret < 0) {
 			perror("Poll failed");
 			break;
 		}
 
-		for (size_t i = 0; i < vector_size(data->v_valid_devices); i++) {
+		// EventListener_stop() was called: drain the eventfd and exit.
+		if (fds[ndevices].revents & POLLIN) {
+			uint64_t val;
+			ssize_t r = read(data->stop_fd, &val, sizeof(val));
+			(void)r;
+			break;
+		}
+
+		for (size_t i = 0; i < ndevices; i++) {
 			if (fds[i].revents & POLLIN) {
 				struct libevdev *dev = data->v_valid_devices[i];
 				struct input_event ev;
@@ -218,9 +242,23 @@ VInputError evdev_EventListener2_start(EventListener *listener,
 	return VINPUT_OK;
 }
 
+VInputError evdev_EventListener_stop(EventListener *listener)
+{
+	if (!listener->initialized) return VINPUT_UNINITIALIZED;
+	EventListenerInternal *data = listener->data;
+	if (!data) return VINPUT_UNINITIALIZED;
+
+	// Wake up poll() in evdev_EventListener2_start so it can return.
+	uint64_t val = 1;
+	ssize_t r = write(data->stop_fd, &val, sizeof(val));
+	(void)r;
+	return VINPUT_OK;
+}
+
 VInputError evdev_EventListener_free(EventListener *listener)
 {
 	EventListenerInternal *data = listener->data;
+	if (data->stop_fd >= 0) close(data->stop_fd);
 	for (size_t i = 0; i < vector_size(data->v_valid_devices); i++) {
 		libevdev_free(data->v_valid_devices[i]);
 	}

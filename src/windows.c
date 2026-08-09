@@ -233,6 +233,20 @@ VINPUT_PUBLIC VInputError EventListener2_start(EventListener *listener,
 	return VINPUT_OK;
 }
 
+VINPUT_PUBLIC VInputError EventListener_stop(EventListener *listener)
+{
+	if (!listener->initialized) return VINPUT_UNINITIALIZED;
+	EventListenerInternal *data = listener->data;
+	if (!data) return VINPUT_UNINITIALIZED;
+
+	// Signal the message loop in EventListener2_start to exit. PostThreadMessage
+	// wakes the blocking GetMessage call on the listening thread.
+	data->running = false;
+	PostThreadMessage(data->thread_id, WM_QUIT_LOOP, 0, 0);
+
+	return VINPUT_OK;
+}
+
 VINPUT_PUBLIC VInputError EventListener_free(EventListener *listener)
 {
 	if (!listener->initialized) return VINPUT_UNINITIALIZED;

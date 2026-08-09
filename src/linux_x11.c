@@ -269,6 +269,24 @@ VInputError x11_EventListener2_start(EventListener *listener, KeyboardCallback c
 	return VINPUT_OK;
 }
 
+VInputError x11_EventListener_stop(EventListener *listener)
+{
+	if (!listener->initialized) return VINPUT_UNINITIALIZED;
+	EventListenerInternal *data = listener->data;
+	if (!data) return VINPUT_UNINITIALIZED;
+
+	// Disabling the context makes the blocking XRecordEnableContext() call in
+	// x11_EventListener2_start return. We must issue this on the control display
+	// (data->dpy), NOT the datalink display, which is busy inside
+	// XRecordEnableContext on the listening thread.
+	if (data->context) {
+		XRecordDisableContext(data->dpy, data->context);
+		XFlush(data->dpy);
+	}
+
+	return VINPUT_OK;
+}
+
 VInputError x11_EventListener_free(EventListener *listener)
 {
 	if (!listener->initialized) return VINPUT_UNINITIALIZED;

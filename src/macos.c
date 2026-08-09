@@ -8,6 +8,7 @@ typedef struct _EventListenerInternal
 {
 	CFMachPortRef eventTap;
 	CFRunLoopSourceRef runLoopSource;
+	CFRunLoopRef runLoop; // The run loop running EventListener2_start, for stopping it
 
 	KeyboardCallback callback;
 	MouseButtonCallback button_callback;
@@ -213,7 +214,9 @@ VInputError _EventListener_init(EventListener *listener)
 		CFRelease(runLoopSource);
 		return VINPUT_MALLOC;
 	}
+	internal->eventTap = eventTap;
 	internal->runLoopSource = runLoopSource;
+	internal->runLoop = NULL;
 
 	listener->data = internal;
 	listener->initialized = true;
@@ -228,7 +231,21 @@ VInputError EventListener2_start(EventListener *listener, KeyboardCallback callb
 	internal->callback = callback;
 	internal->button_callback = button_callback;
 	internal->move_callback = move_callback;
+	internal->runLoop = CFRunLoopGetCurrent();
 	CFRunLoopRun();
+	internal->runLoop = NULL;
+	return VINPUT_OK;
+}
+
+VInputError EventListener_stop(EventListener *listener)
+{
+	if (!listener->initialized) return VINPUT_UNINITIALIZED;
+	EventListenerInternal *internal = (EventListenerInternal *)listener->data;
+	if (!internal) return VINPUT_UNINITIALIZED;
+
+	// CFRunLoopStop is thread-safe; it makes the blocking CFRunLoopRun() in
+	// EventListener2_start return.
+	if (internal->runLoop) CFRunLoopStop(internal->runLoop);
 	return VINPUT_OK;
 }
 
