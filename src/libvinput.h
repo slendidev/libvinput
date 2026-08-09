@@ -18,6 +18,14 @@
 #undef VINPUT_PUBLIC
 #define VINPUT_PUBLIC
 
+#if defined(_MSC_VER)
+#	define VINPUT_DEPRECATED(message) __declspec(deprecated(message))
+#elif defined(__GNUC__) || defined(__clang__)
+#	define VINPUT_DEPRECATED(message) __attribute__((deprecated(message)))
+#else
+#	define VINPUT_DEPRECATED(message)
+#endif
+
 // If you wish to use the old names, you need to define "#define LIBVINPUT_OLD_NAMES"
 // before including this header.
 
@@ -154,17 +162,13 @@ VINPUT_PUBLIC uint32_t VInput_version(void);
 VINPUT_PUBLIC char const *VInput_error_get_message(VInputError error);
 
 // Create a EventListener, does not allocate memory for the listener.
-VINPUT_PUBLIC VInputError EventListener_create(
-    EventListener *listener, bool listen_keyboard)
-    __attribute__((deprecated("Use EventListener2_create instead")));
-;
+VINPUT_PUBLIC VInputError EventListener_create(EventListener *listener,
+    bool listen_keyboard) VINPUT_DEPRECATED("Use EventListener2_create instead");
 VINPUT_PUBLIC VInputError EventListener2_create(EventListener *listener,
     bool listen_keyboard, bool listen_mouse_button, bool listen_mouse_move);
 // Make a Listener start listening. This is a blocking call.
-VINPUT_PUBLIC VInputError EventListener_start(
-    EventListener *listener, KeyboardCallback callback)
-    __attribute__((deprecated("Use EventListener2_start instead")));
-;
+VINPUT_PUBLIC VInputError EventListener_start(EventListener *listener,
+    KeyboardCallback callback) VINPUT_DEPRECATED("Use EventListener2_start instead");
 VINPUT_PUBLIC VInputError EventListener2_start(EventListener *listener,
     KeyboardCallback callback, MouseButtonCallback button_callback,
     MouseMoveCallback move_callback);

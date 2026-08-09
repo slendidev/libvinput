@@ -30,7 +30,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libevdev-dev libx11-dev libxdo-dev libxtst-dev pkg-config
+          sudo apt-get install -y libevdev-dev libx11-dev libxdo-dev libxtst-dev libxkbcommon-dev pkg-config
 
       - name: Build
         run: make -j2 all
