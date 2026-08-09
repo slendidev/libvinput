@@ -199,7 +199,6 @@ VINPUT_PUBLIC VInputError EventEmulator_free(EventEmulator *emulator);
 #ifdef LIBVINPUT_OLD_NAMES
 #	define Listener_create EventListener_create
 #	define Listener_start EventListener_start
-#	define Listener_stop EventListener_stop
 #	define Listener_free EventListener_free
 
 #	define Emulator_create EventEmulator_create
