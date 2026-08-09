@@ -19,3 +19,7 @@ compile_commands.json
 *.o
 .cache
 *.so
+.devenv/
+.direnv/
+.pre-commit-config.yaml
+result

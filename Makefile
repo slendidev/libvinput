@@ -9,6 +9,8 @@ VERSION = 0x010203
 
 SRC = src/libvinput.c
 
+PREFIX ?= /usr/local
+
 # Linux/X11/uinput+evdev
 ifeq ($(shell uname), Linux)
 all: wordlogger test_emu test_echo
@@ -60,9 +62,13 @@ test_echo: test_echo.c libvinput.so
 	$(CC) $(CFLAGS) test_echo.c -o $@ -L. -lvinput -lX11 -lXtst -levdev -I/usr/local/include -Isrc -L/usr/local/lib -lxdo
 
 install: libvinput.so
-	rm -f /usr/local/lib/libvinput.* && install -m 777 libvinput.so /usr/local/lib && mv /usr/local/lib/libvinput.so /usr/local/lib/libvinput.so.$(VERSION) && ln -s /usr/local/lib/libvinput.so.$(VERSION) /usr/local/lib/libvinput.so
-	install -m 644 src/libvinput.h /usr/local/include
-	install -m 644 libvinput.pc /usr/local/lib/pkgconfig
+	rm -f $(PREFIX)/lib/libvinput.* && \
+	mkdir -p $(PREFIX)/include $(PREFIX)/lib && \
+	install -m 755 libvinput.so $(PREFIX)/lib && \
+	mv $(PREFIX)/lib/libvinput.so $(PREFIX)/lib/libvinput.so.$(VERSION) && \
+	ln -s $(PREFIX)/lib/libvinput.so.$(VERSION) $(PREFIX)/lib/libvinput.so
+	install -m 644 src/libvinput.h $(PREFIX)/include
+	install -m 644 libvinput.pc $(PREFIX)/lib/pkgconfig
 
 clean:
 	rm -f wordlogger
@@ -91,6 +97,15 @@ test_emu_mac: test_emu.c libvinput.dylib
 
 test_echo: test_echo.c libvinput.dylib
 	$(CC) $(CFLAGS) test_echo.c -o $@ -Isrc -L. -lvinput -Wl,-rpath,@loader_path/.
+
+install: libvinput.dylib
+	rm -f $(PREFIX)/lib/libvinput.* && \
+	mkdir -p $(PREFIX)/include $(PREFIX)/lib && \
+	install -m 755 libvinput.dylib $(PREFIX)/lib && \
+	mv $(PREFIX)/lib/libvinput.dylib $(PREFIX)/lib/libvinput.dylib.$(VERSION) && \
+	ln -s $(PREFIX)/lib/libvinput.dylib.$(VERSION) $(PREFIX)/lib/libvinput.dylib
+	install -m 644 src/libvinput.h $(PREFIX)/include
+	install -m 644 libvinput.pc $(PREFIX)/lib/pkgconfig
 
 clean:
 	rm -f wordlogger_mac
