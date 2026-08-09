@@ -116,35 +116,34 @@ endif
 # Windows/WINAPI
 ifeq ($(OS), Windows_NT)
 
-all: wordlogger libvinput.dll vinput.lib
-	dumpbin /EXPORTS vinput.lib
+all: wordlogger.exe test_emu.exe test_echo.exe libvinput.dll vinput.lib
 
 libvinput.dll: libvinput.obj windows_emu.obj windows.obj
-	link /DLL /OUT:libvinput.dll libvinput.obj windows_emu.obj windows.obj User32.lib Kernel32.lib
+	link /DLL /OUT:$@ $^ User32.lib Kernel32.lib
 
 libvinput.obj: src/libvinput.c
-	cl /D VERSION= $(VERSION) /LD /I src /DBUILDING_VINPUT /Fo$@ /c src\libvinput.c
+	cl /DVERSION=$(VERSION) /I src /DBUILDING_VINPUT /Fo:$@ /c $<
 
 windows_emu.obj: src/windows_emu.c
-	cl /D VERSION= $(VERSION) /LD /I src /DBUILDING_VINPUT /Fo$@ /c src\windows_emu.c
+	cl /DVERSION=$(VERSION) /I src /DBUILDING_VINPUT /Fo:$@ /c $<
 
 windows.obj: src/windows.c
-	cl /D VERSION= $(VERSION) /LD /I src /DBUILDING_VINPUT /Fo$@ /c src\windows.c
+	cl /DVERSION=$(VERSION) /I src /DBUILDING_VINPUT /Fo:$@ /c $<
 
 vinput.lib: libvinput.obj windows_emu.obj windows.obj
-	lib /OUT:vinput.lib libvinput.obj windows_emu.obj windows.obj
+	lib /OUT:$@ $^
 
-wordlogger: wordlogger.c vinput.lib
-	cl /I src /Fo$@ /Fe$@ wordlogger.c vinput.lib User32.lib Kernel32.lib
+wordlogger.exe: wordlogger.c vinput.lib
+	cl /I src /Fo:wordlogger.obj /Fe:$@ $^ User32.lib Kernel32.lib
 
-test_emu: test_emu.c vinput.lib
-	cl /I src /Fo$@ /Fe$@ test_emu.c vinput.lib User32.lib Kernel32.lib
+test_emu.exe: test_emu.c vinput.lib
+	cl /I src /Fo:test_emu.obj /Fe:$@ $^ User32.lib Kernel32.lib
 
-test_echo: test_echo.c vinput.lib
-	cl /I src /Fo$@ /Fe$@ test_echo.c vinput.lib User32.lib Kernel32.lib
+test_echo.exe: test_echo.c vinput.lib
+	cl /I src /Fo:test_echo.obj /Fe:$@ $^ User32.lib Kernel32.lib
 
 clean:
-	del /F /Q libvinput.dll vinput.lib libvinput.obj windows_emu.obj windows.obj
+	del /F /Q libvinput.dll vinput.lib *.obj wordlogger.exe test_emu.exe test_echo.exe
 endif
 
 cppcheck:

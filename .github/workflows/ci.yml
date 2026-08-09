@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck libevdev-dev libx11-dev libxdo-dev libxtst-dev pkg-config
+
+      - name: Build
+        run: make -j2 all
+
+      - name: Static analysis
+        if: runner.os == 'Linux'
+        run: make cppcheck
+
+  windows:
+    name: Build (windows-latest)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install make
+        shell: pwsh
+        run: choco install make --yes --no-progress
+
+      - name: Build
+        shell: cmd
+        run: make SHELL=cmd.exe all
