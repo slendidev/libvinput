@@ -105,3 +105,22 @@ jobs:
           files: dist/*
           fail_on_unmatched_files: true
           generate_release_notes: true
+
+      # Notify the Python bindings repo so it can pull these new binaries and cut
+      # a matching release. The target repo defaults to the upstream bindings repo
+      # but can be overridden per-fork with a `LIBVINPUTPY_REPO` repository
+      # variable. Requires a PAT (LIBVINPUTPY_DISPATCH_TOKEN) with `contents:
+      # write` on that repo stored as a secret here. If the secret is absent this
+      # step is skipped, and the bindings repo's daily scheduled job will pick up
+      # the release within a day instead.
+      - name: Notify Python bindings repo of new release
+        env:
+          DISPATCH_TOKEN: ${{ secrets.LIBVINPUTPY_DISPATCH_TOKEN }}
+          BINDINGS_REPO: ${{ vars.LIBVINPUTPY_REPO || 'xslendix/libvinput.py' }}
+        if: env.DISPATCH_TOKEN != ''
+        run: |
+          curl -fsSL -X POST \
+            -H "Authorization: Bearer $DISPATCH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${BINDINGS_REPO}/dispatches" \
+            -d "{\"event_type\":\"libvinput-release\",\"client_payload\":{\"tag\":\"${GITHUB_REF_NAME}\"}}"
